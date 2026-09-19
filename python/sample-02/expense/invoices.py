@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 
+from expense.accounts import AccountStore
+from expense.ledger import Entry, Ledger
 from expense.money import Money
+from expense.payouts import create_payout
 
 
 class InvoiceStatus(Enum):
@@ -36,6 +40,26 @@ class Invoice:
         if self.status is not InvoiceStatus.APPROVED:
             raise ValueError("only approved invoices can be marked paid")
         self.status = InvoiceStatus.PAID
+
+    def pay_now(
+        self,
+        accounts: AccountStore,
+        ledger: Ledger,
+        *,
+        now: datetime | None = None,
+    ) -> Entry:
+        """Pay this approved invoice immediately instead of waiting for batch."""
+        if self.status is not InvoiceStatus.APPROVED:
+            raise ValueError("only approved invoices can be paid now")
+        return create_payout(
+            accounts,
+            ledger,
+            source_id=self.payer_id,
+            dest_id=self.payee_id,
+            amount=self.total,
+            ref=f"invoice:{self.id}:now",
+            now=now,
+        )
 
     @property
     def ledger_ref(self) -> str:
