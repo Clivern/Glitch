@@ -1,0 +1,227 @@
+version: 1.0.0
+
+# Labels definitions
+labels:
+  - name: "state/queued"
+    color: "0E8A16"
+    description: "PR is currently waiting in the merge queue line."
+  - name: "state/checking"
+    color: "FBCA04"
+    description: "Speculative CI checks are running on this PR."
+  - name: "state/dequeued"
+    color: "D93F0B"
+    description: "PR was kicked out or removed from the merge queue."
+  - name: "size/s"
+    color: "0E8A16"
+    description: "Small PR with 20 or fewer files changed."
+  - name: "size/l"
+    color: "B60205"
+    description: "Large PR with 21 or more files changed."
+  - name: "bot"
+    color: "EEEEEE"
+    description: "Automated PR created by a bot account."
+  - name: "hotfix"
+    color: "D93F0B"
+    description: "High-priority critical fix bypassing standard queues."
+  - name: "bug"
+    color: "D93F0B"
+    description: "Identified bug fix requiring patch-level verification."
+  - name: "enhancement"
+    color: "A2EEEF"
+    description: "New feature or system optimization."
+  - name: "docs"
+    color: "0075CA"
+    description: "Documentation changes only."
+  - name: "first-contribution"
+    color: "C5DEF5"
+    description: "Author's first issue or pull request on this repository."
+  - name: "spam"
+    color: "B60205"
+    description: "Spam or abuse."
+
+# Teams definitions (union with GitHub org teams for author_in_team)
+teams:
+  - name: maintainers
+    members:
+      - octocat
+
+# Repository knowledge base for AI contexts
+knowledge:
+  - path: docs/
+    tags:
+      tag: docs
+
+merge_queue:
+  # Whether to enable the merge queue
+  enabled: false
+  # how PRs stack for CI: serial | parallel | isolated
+  mode: serial
+  # speculative CI slots (1 = wait for the front of the line)
+  max_parallel_checks: 5
+  # restart if main moved outside the queue: always | never
+  reset_on_external_merge: always
+  # GitHub labels Ziee applies for queue state
+  labels:
+    queued: state/queued
+    checking: state/checking
+    dequeued: state/dequeued
+  # outcomes | all | none
+  comments: outcomes
+
+  # Pull request triage only (not issues). Re-run on PR open, sync, and edit.
+  pr_triage:
+    ai:
+      enabled: false
+    rules:
+      - name: rate-limit
+        when:
+          - max_prs_opened: { count: 3, within: 24h }
+        labels:
+          add: [spam]
+        close: true
+        block_author: true
+        comment: "Too many pull requests in a short time. Please wait before opening another."
+      - name: spam-blocklist
+        when:
+          - author_blocked: true
+        labels:
+          add: [spam]
+        close: true
+        comment: "This account is blocked from opening pull requests here."
+      - name: spam
+        when:
+          - intention:
+              name: spam
+              description: >-
+                Unsolicited promo, phishing, crypto/SEO spam, nonsense,
+                or content unrelated to this repository.
+        labels:
+          add: [spam]
+        close: true
+        block_author: true
+        comment: "Closed as spam. If this was a mistake, contact a maintainer."
+      - name: size-s
+        when:
+          - max_files_changed: 20
+        labels:
+          add: [size/s]
+      - name: size-l
+        when:
+          - min_files_changed: 21
+        labels:
+          add: [size/l]
+          remove: [size/s]
+      - name: bot
+        when:
+          - author_in: [dependabot, ziee-bot]
+        labels:
+          add: [bot]
+      - name: first-contribution
+        when:
+          - first_contribution: true
+        labels:
+          add: [first-contribution]
+        comment: "Welcome — thanks for your first pull request! A maintainer will review it soon."
+      - name: hotfix
+        when:
+          - title: "hotfix"
+        labels:
+          add: [hotfix]
+
+  # Commands are typed on the PR.
+  commands:
+    queue:
+      allow:
+        - permission: write
+        - self: true
+    dequeue:
+      allow:
+        - permission: write
+    requeue:
+      allow:
+        - permission: write
+    rebase:
+      allow:
+        - permission: write
+    update:
+      allow:
+        - permission: write
+    refresh:
+      allow:
+        - permission: write
+
+  priority_rules:
+    - name: hotfix
+      when:
+        - label: hotfix
+      priority: high
+      interrupt_checks: true
+    - name: normal
+      when: []
+      priority: medium
+
+  queue_rules:
+    - name: default
+      queue_when:
+        - label: state/queued
+      merge_when:
+        - check: ci
+      merge_method: squash
+      checks_timeout: auto
+      max_checks_retries: 2
+
+issue_triage:
+  enabled: false
+  comments: outcomes
+  ai:
+    enabled: false
+  commands:
+    label:
+      allow:
+        - permission: write
+    assign:
+      allow:
+        - permission: write
+    close:
+      allow:
+        - permission: write
+    spam:
+      allow:
+        - permission: write
+  rules:
+    - name: rate-limit
+      when:
+        - max_issues_opened: { count: 3, within: 24h }
+      labels:
+        add: [spam]
+      close: true
+      block_author: true
+      comment: "Too many issues in a short time. Please wait before opening another."
+    - name: spam-blocklist
+      when:
+        - author_blocked: true
+      labels:
+        add: [spam]
+      close: true
+      comment: "This account is blocked from opening issues here."
+    - name: spam
+      when:
+        - intention:
+            name: spam
+            description: >-
+              Unsolicited promo, phishing, crypto/SEO spam, nonsense,
+              or content unrelated to this repository.
+      labels:
+        add: [spam]
+      close: true
+      block_author: true
+      comment: "Closed as spam. If this was a mistake, contact a maintainer."
+    - name: first-contribution
+      when:
+        - first_contribution: true
+      labels:
+        add: [first-contribution]
+      comment: "Welcome — thanks for opening your first issue here! A maintainer will take a look soon."
+
+pr_reviews:
+  enabled: false
