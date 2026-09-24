@@ -1,0 +1,204 @@
+version: 1.0.0
+
+labels:
+  - { name: spam, color: "B60205", description: "Closed as spam" }
+  - { name: bot, color: "EEEEEE", description: "Opened by a bot" }
+  - { name: first-contribution, color: "0E8A16", description: "Author's first issue" }
+  - { name: team/sre, color: "5319E7", description: "Author is on the sre team" }
+  - { name: community, color: "C5DEF5", description: "Author is not on the sre team" }
+  - { name: hotfix, color: "D93F0B", description: "Title or body matches hotfix" }
+  - { name: needs-triage, color: "FBCA04", description: "Removed when a rule matches" }
+  - { name: tracked, color: "1D76DB", description: "Issue already has the tracked label" }
+  - { name: bug, color: "D93F0B", description: "AI: bug" }
+  - { name: enhancement, color: "A2EEEF", description: "AI: enhancement" }
+  - { name: docs, color: "0075CA", description: "AI: docs" }
+  - { name: security, color: "B60205", description: "AI: security" }
+  - { name: closed-again, color: "CCCCCC", description: "Matched a closed issue" }
+
+teams:
+  - name: sre
+    members: [clivern]
+
+issue_triage:
+  enabled: true
+  comments: outcomes
+  ai:
+    enabled: true
+  commands:
+    label:
+      allow:
+        - teams: [sre]
+    unlabel:
+      allow:
+        - users: [clivern]
+    assign:
+      allow:
+        - self: true
+    unassign:
+      allow:
+        - teams: [sre]
+        - users: [clivern]
+    close:
+      allow:
+        - users: [clivern]
+    reopen:
+      allow:
+        - self: true
+    spam:
+      allow:
+        - teams: [sre]
+    summarize:
+      allow:
+        - users: [clivern]
+  rules:
+    # Open a 4th issue within 24h as someone who is not clivern and not a bot.
+    - name: rate-limit
+      when:
+        - author_not_in: [dependabot]
+        - author_not_in_team: [sre]
+        - max_issues_opened: { count: 3, within: 24h }
+      labels:
+        add: [spam]
+      close: true
+      block_author: true
+      comment: "Too many issues in 24h."
+
+    # Open as known-spammer.
+    - name: blocked-authors
+      when:
+        - author_in: [known-spammer]
+      labels:
+        add: [spam]
+      close: true
+      block_author: true
+      comment: "This account is blocked."
+
+    # Open again after a previous spam or rate-limit block.
+    - name: spam-blocklist
+      when:
+        - author_blocked
+      labels:
+        add: [spam]
+      close: true
+      comment: "This account is on the blocklist."
+
+    # Title/body that is promo, phishing, or unrelated to the repo.
+    - name: spam
+      when:
+        - author_not_in: [dependabot]
+        - intention:
+            name: spam
+            description: "Unsolicited promo, phishing, or content unrelated to this repository."
+      labels:
+        add: [spam]
+      close: true
+      block_author: true
+      comment: "Closed as spam."
+
+    # Open as dependabot.
+    - name: bot
+      when:
+        - author_in: [dependabot]
+      labels:
+        add: [bot]
+
+    # First issue from a human who is not dependabot.
+    - name: first-contribution
+      when:
+        - author_not_in: [dependabot]
+        - first_contribution
+      labels:
+        add: [first-contribution]
+      comment: "Welcome — thanks for the first issue."
+
+    # Open as clivern (member of teams.sre above).
+    - name: from-sre
+      when:
+        - author_in_team: [sre]
+      labels:
+        add: [team/sre]
+
+    # Open as anyone who is not on sre.
+    - name: not-sre
+      when:
+        - author_not_in_team: [sre]
+      labels:
+        add: [community]
+
+    # Title contains "hotfix".
+    - name: title-hotfix
+      when:
+        - title: "hotfix"
+      labels:
+        add: [hotfix]
+        remove: [needs-triage]
+      assign: [clivern]
+
+    # Body contains "hotfix".
+    - name: body-hotfix
+      when:
+        - body: "hotfix"
+      labels:
+        add: [hotfix]
+      comment: "Body matched hotfix."
+
+    # Issue already has the tracked label (add it, then edit the issue).
+    - name: has-label
+      when:
+        - label: tracked
+      comment: "This issue is tracked."
+
+    # Author is clivern or the title contains "urgent", and the author is not dependabot.
+    - name: and-or
+      when:
+        - or:
+            - author_in: [clivern]
+            - title: "urgent"
+        - and:
+            - author_not_in: [dependabot]
+            - -closed
+      labels:
+        add: [tracked]
+
+    # Re-open evaluation of an already closed issue.
+    - name: when-closed
+      when:
+        - closed
+      labels:
+        add: [closed-again]
+
+    # Title like "crash" / "broken".
+    - name: bug
+      when:
+        - intention:
+            name: bug
+            description: "A defect or unexpected behavior."
+      labels:
+        add: [bug]
+      assign: [clivern]
+      comment: "Thanks — we'll look at this bug."
+
+    # Title like "add support for …".
+    - name: enhancement
+      when:
+        - intention: enhancement
+      labels:
+        add: [enhancement]
+
+    # Title like "docs are wrong".
+    - name: docs
+      when:
+        - intention:
+            name: docs
+            description: "A documentation request."
+      labels:
+        add: [docs]
+      assign: [maya]
+
+    # Title like "vulnerability in …".
+    - name: security
+      when:
+        - intention: security
+      labels:
+        add: [security]
+      assign: [clivern]
