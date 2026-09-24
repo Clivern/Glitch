@@ -56,7 +56,7 @@ issue_triage:
       when:
         - author_not_in: [dependabot]
         - author_not_in_team: [sre]
-        - max_issues_opened: { count: 3, within: 24h }
+        - max_issues_opened: { count: 100, within: 24h }
       labels:
         add: [spam]
       close: true
