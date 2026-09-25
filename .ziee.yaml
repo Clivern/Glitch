@@ -27,29 +27,37 @@ issue_triage:
   commands:
     label:
       allow:
+        - users: [clivern]
         - teams: [sre]
     unlabel:
       allow:
         - users: [clivern]
+        - teams: [sre]
     assign:
       allow:
+        - users: [clivern]
         - self: true
     unassign:
       allow:
-        - teams: [sre]
         - users: [clivern]
+        - teams: [sre]
     close:
       allow:
         - users: [clivern]
+        - teams: [sre]
     reopen:
       allow:
+        - users: [clivern]
+        - teams: [sre]
         - self: true
     spam:
       allow:
+        - users: [clivern]
         - teams: [sre]
     summarize:
       allow:
         - users: [clivern]
+        - teams: [sre]
   rules:
     # Open a 4th issue within 24h as someone who is not clivern and not a bot.
     - name: rate-limit
