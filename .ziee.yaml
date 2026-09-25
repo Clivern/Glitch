@@ -21,7 +21,7 @@ teams:
 
 issue_triage:
   enabled: true
-  comments: outcomes
+  comments: none
   ai:
     enabled: true
   commands:
