@@ -1,23 +1,27 @@
 version: 1.0.0
 
-# Glitch sandbox — exercise issue triage, PR triage, commands, and assistant.
+# Glitch sandbox — PR triage only.
 
 labels:
   - { name: spam, color: "B60205", description: "Closed as spam" }
   - { name: bot, color: "EEEEEE", description: "Opened by a bot" }
-  - { name: first-contribution, color: "0E8A16", description: "Author's first issue or PR" }
+  - { name: first-contribution, color: "0E8A16", description: "Author's first pull request" }
   - { name: team/sre, color: "5319E7", description: "Author is on the sre team" }
   - { name: community, color: "C5DEF5", description: "Author is not on the sre team" }
   - { name: hotfix, color: "D93F0B", description: "Title or body matches hotfix" }
   - { name: needs-triage, color: "FBCA04", description: "Removed when a rule matches" }
-  - { name: tracked, color: "1D76DB", description: "Issue already has the tracked label" }
   - { name: bug, color: "D93F0B", description: "AI: bug" }
   - { name: enhancement, color: "A2EEEF", description: "AI: enhancement" }
   - { name: docs, color: "0075CA", description: "AI: docs" }
   - { name: security, color: "B60205", description: "AI: security" }
-  - { name: closed-again, color: "CCCCCC", description: "Matched a closed issue" }
+  - { name: draft, color: "C5DEF5", description: "PR is a draft" }
+  - { name: ready, color: "0E8A16", description: "PR is ready for review (not draft)" }
+  - { name: closed-again, color: "CCCCCC", description: "Matched a closed PR" }
   - { name: area/python, color: "3572A5", description: "Changes under python/" }
   - { name: area/review, color: "5319E7", description: "Changes under review-code/" }
+  - { name: lang/python, color: "3572A5", description: "PR changes Python files" }
+  - { name: lang/yaml, color: "8E44AD", description: "PR changes YAML files" }
+  - { name: lang/md, color: "0075CA", description: "PR changes Markdown files" }
   - { name: size/s, color: "2ECC71", description: "Small PR (20 files or fewer)" }
   - { name: size/l, color: "E67E22", description: "Large PR (21+ files)" }
 
@@ -30,194 +34,9 @@ knowledge:
     tags:
       tag: docs
 
+# Issue triage off — this pass is PR triage only.
 issue_triage:
-  enabled: true
-  # outcomes so we can see triage comments while testing
-  comments: outcomes
-  ai:
-    enabled: true
-    max_issues_opened: { count: 50, within: 24h }
-    except:
-      - or:
-          - author_in: [dependabot, ziee-bot]
-          - author_in_team: [sre]
-    knowledge:
-      - tag: docs
-  commands:
-    label:
-      allow:
-        - users: [clivern]
-        - teams: [sre]
-    unlabel:
-      allow:
-        - users: [clivern]
-        - teams: [sre]
-    assign:
-      allow:
-        - users: [clivern]
-        - self: true
-    unassign:
-      allow:
-        - users: [clivern]
-        - teams: [sre]
-    close:
-      allow:
-        - users: [clivern]
-        - teams: [sre]
-    reopen:
-      allow:
-        - users: [clivern]
-        - teams: [sre]
-        - self: true
-    spam:
-      allow:
-        - users: [clivern]
-        - teams: [sre]
-    summarize:
-      allow:
-        - users: [clivern]
-        - teams: [sre]
-        - self: true
-  rules:
-    - name: rate-limit
-      when:
-        - author_not_in: [dependabot, ziee-bot]
-        - author_not_in_team: [sre]
-        - max_issues_opened: { count: 100, within: 24h }
-      labels:
-        add: [spam]
-      close: true
-      block_author: true
-      comment: "Too many issues in 24h."
-
-    - name: blocked-authors
-      when:
-        - author_in: [known-spammer]
-      labels:
-        add: [spam]
-      close: true
-      block_author: true
-      comment: "This account is blocked."
-
-    - name: spam-blocklist
-      when:
-        - author_blocked
-      labels:
-        add: [spam]
-      close: true
-      comment: "This account is on the blocklist."
-
-    - name: spam
-      when:
-        - author_not_in: [dependabot, ziee-bot]
-        - author_not_in_team: [sre]
-        - intention:
-            name: spam
-            description: "Unsolicited promo, phishing, crypto/SEO spam, or content unrelated to this repository."
-      labels:
-        add: [spam]
-      close: true
-      block_author: true
-      comment: "Closed as spam."
-
-    - name: bot
-      when:
-        - author_in: [dependabot, ziee-bot]
-      labels:
-        add: [bot]
-
-    - name: first-contribution
-      when:
-        - author_not_in: [dependabot, ziee-bot]
-        - first_contribution
-      labels:
-        add: [first-contribution]
-      comment: "Welcome — thanks for the first issue."
-
-    - name: from-sre
-      when:
-        - author_in_team: [sre]
-      labels:
-        add: [team/sre]
-
-    - name: not-sre
-      when:
-        - author_not_in_team: [sre]
-      labels:
-        add: [community]
-
-    - name: title-hotfix
-      when:
-        - title: "hotfix"
-      labels:
-        add: [hotfix]
-        remove: [needs-triage]
-      assign: [clivern]
-
-    - name: body-hotfix
-      when:
-        - body: "hotfix"
-      labels:
-        add: [hotfix]
-      comment: "Body matched hotfix."
-
-    - name: has-label
-      when:
-        - label: tracked
-      comment: "This issue is tracked."
-
-    - name: and-or
-      when:
-        - or:
-            - author_in: [clivern]
-            - title: "urgent"
-        - and:
-            - author_not_in: [dependabot, ziee-bot]
-            - -closed
-      labels:
-        add: [tracked]
-
-    - name: when-closed
-      when:
-        - closed
-      labels:
-        add: [closed-again]
-
-    - name: bug
-      when:
-        - author_not_in: [dependabot, ziee-bot]
-        - intention:
-            name: bug
-            description: "A defect or unexpected behavior."
-      labels:
-        add: [bug]
-      assign: [clivern]
-      comment: "Thanks — we'll look at this bug."
-
-    - name: enhancement
-      when:
-        - author_not_in: [dependabot, ziee-bot]
-        - intention: enhancement
-      labels:
-        add: [enhancement]
-
-    - name: docs
-      when:
-        - author_not_in: [dependabot, ziee-bot]
-        - intention:
-            name: docs
-            description: "A documentation request."
-      labels:
-        add: [docs]
-      assign: [clivern]
-
-    - name: security
-      when:
-        - author_not_in: [dependabot, ziee-bot]
-        - intention: security
-      labels:
-        add: [security]
-      assign: [clivern]
+  enabled: false
 
 pr_triage:
   enabled: true
@@ -289,7 +108,7 @@ pr_triage:
         add: [spam]
       close: true
       block_author: true
-      comment: "This account is blocked."
+      comment: "This account is blocked from opening pull requests here."
 
     - name: spam-blocklist
       when:
@@ -305,7 +124,10 @@ pr_triage:
         - author_not_in_team: [sre]
         - intention:
             name: spam
-            description: "Unsolicited promo, phishing, or content unrelated to this repository."
+            description: >-
+              Unsolicited promo, phishing, crypto/SEO spam, nonsense,
+              or content unrelated to this repository. Not a real bug,
+              feature, or docs change.
       labels:
         add: [spam]
       close: true
@@ -325,6 +147,24 @@ pr_triage:
       labels:
         add: [area/review]
       assign: [clivern]
+
+    - name: lang-python
+      when:
+        - files: ["**/*.py"]
+      labels:
+        add: [lang/python]
+
+    - name: lang-yaml
+      when:
+        - files: ["**/*.yml", "**/*.yaml"]
+      labels:
+        add: [lang/yaml]
+
+    - name: lang-md
+      when:
+        - files: ["**/*.md"]
+      labels:
+        add: [lang/md]
 
     - name: size-s
       when:
@@ -371,6 +211,7 @@ pr_triage:
         - title: "hotfix"
       labels:
         add: [hotfix]
+        remove: [needs-triage]
       assign: [clivern]
 
     - name: body-hotfix
@@ -379,6 +220,26 @@ pr_triage:
       labels:
         add: [hotfix]
       comment: "Body matched hotfix."
+
+    - name: draft
+      when:
+        - draft
+      labels:
+        add: [draft]
+        remove: [ready]
+
+    - name: ready
+      when:
+        - -draft
+      labels:
+        add: [ready]
+        remove: [draft]
+
+    - name: when-closed
+      when:
+        - closed
+      labels:
+        add: [closed-again]
 
     - name: bug
       when:
@@ -389,6 +250,7 @@ pr_triage:
       labels:
         add: [bug]
       assign: [clivern]
+      comment: "Thanks — we'll look at this bug fix PR."
 
     - name: enhancement
       when:
@@ -417,20 +279,10 @@ pr_triage:
 
 assistant:
   history: 20
-  knowledge:
-    - tag: docs
   issues:
-    enabled: true
-    allow:
-      - users: [clivern]
-      - teams: [sre]
-      - self: true
+    enabled: false
   pull_requests:
-    enabled: true
-    allow:
-      - users: [clivern]
-      - teams: [sre]
-      - self: true
+    enabled: false
 
 merge_queue:
   enabled: false
