@@ -1,9 +1,11 @@
 version: 1.0.0
 
+# Glitch sandbox — exercise issue triage, PR triage, commands, and assistant.
+
 labels:
   - { name: spam, color: "B60205", description: "Closed as spam" }
   - { name: bot, color: "EEEEEE", description: "Opened by a bot" }
-  - { name: first-contribution, color: "0E8A16", description: "Author's first issue" }
+  - { name: first-contribution, color: "0E8A16", description: "Author's first issue or PR" }
   - { name: team/sre, color: "5319E7", description: "Author is on the sre team" }
   - { name: community, color: "C5DEF5", description: "Author is not on the sre team" }
   - { name: hotfix, color: "D93F0B", description: "Title or body matches hotfix" }
@@ -14,16 +16,33 @@ labels:
   - { name: docs, color: "0075CA", description: "AI: docs" }
   - { name: security, color: "B60205", description: "AI: security" }
   - { name: closed-again, color: "CCCCCC", description: "Matched a closed issue" }
+  - { name: area/python, color: "3572A5", description: "Changes under python/" }
+  - { name: area/review, color: "5319E7", description: "Changes under review-code/" }
+  - { name: size/s, color: "2ECC71", description: "Small PR (20 files or fewer)" }
+  - { name: size/l, color: "E67E22", description: "Large PR (21+ files)" }
 
 teams:
   - name: sre
     members: [clivern]
 
+knowledge:
+  - path: README.md
+    tags:
+      tag: docs
+
 issue_triage:
   enabled: true
-  comments: none
+  # outcomes so we can see triage comments while testing
+  comments: outcomes
   ai:
     enabled: true
+    max_issues_opened: { count: 50, within: 24h }
+    except:
+      - or:
+          - author_in: [dependabot, ziee-bot]
+          - author_in_team: [sre]
+    knowledge:
+      - tag: docs
   commands:
     label:
       allow:
@@ -58,11 +77,11 @@ issue_triage:
       allow:
         - users: [clivern]
         - teams: [sre]
+        - self: true
   rules:
-    # Open a 4th issue within 24h as someone who is not clivern and not a bot.
     - name: rate-limit
       when:
-        - author_not_in: [dependabot]
+        - author_not_in: [dependabot, ziee-bot]
         - author_not_in_team: [sre]
         - max_issues_opened: { count: 100, within: 24h }
       labels:
@@ -71,7 +90,6 @@ issue_triage:
       block_author: true
       comment: "Too many issues in 24h."
 
-    # Open as known-spammer.
     - name: blocked-authors
       when:
         - author_in: [known-spammer]
@@ -81,7 +99,6 @@ issue_triage:
       block_author: true
       comment: "This account is blocked."
 
-    # Open again after a previous spam or rate-limit block.
     - name: spam-blocklist
       when:
         - author_blocked
@@ -90,10 +107,202 @@ issue_triage:
       close: true
       comment: "This account is on the blocklist."
 
-    # Title/body that is promo, phishing, or unrelated to the repo.
     - name: spam
       when:
-        - author_not_in: [dependabot]
+        - author_not_in: [dependabot, ziee-bot]
+        - author_not_in_team: [sre]
+        - intention:
+            name: spam
+            description: "Unsolicited promo, phishing, crypto/SEO spam, or content unrelated to this repository."
+      labels:
+        add: [spam]
+      close: true
+      block_author: true
+      comment: "Closed as spam."
+
+    - name: bot
+      when:
+        - author_in: [dependabot, ziee-bot]
+      labels:
+        add: [bot]
+
+    - name: first-contribution
+      when:
+        - author_not_in: [dependabot, ziee-bot]
+        - first_contribution
+      labels:
+        add: [first-contribution]
+      comment: "Welcome — thanks for the first issue."
+
+    - name: from-sre
+      when:
+        - author_in_team: [sre]
+      labels:
+        add: [team/sre]
+
+    - name: not-sre
+      when:
+        - author_not_in_team: [sre]
+      labels:
+        add: [community]
+
+    - name: title-hotfix
+      when:
+        - title: "hotfix"
+      labels:
+        add: [hotfix]
+        remove: [needs-triage]
+      assign: [clivern]
+
+    - name: body-hotfix
+      when:
+        - body: "hotfix"
+      labels:
+        add: [hotfix]
+      comment: "Body matched hotfix."
+
+    - name: has-label
+      when:
+        - label: tracked
+      comment: "This issue is tracked."
+
+    - name: and-or
+      when:
+        - or:
+            - author_in: [clivern]
+            - title: "urgent"
+        - and:
+            - author_not_in: [dependabot, ziee-bot]
+            - -closed
+      labels:
+        add: [tracked]
+
+    - name: when-closed
+      when:
+        - closed
+      labels:
+        add: [closed-again]
+
+    - name: bug
+      when:
+        - author_not_in: [dependabot, ziee-bot]
+        - intention:
+            name: bug
+            description: "A defect or unexpected behavior."
+      labels:
+        add: [bug]
+      assign: [clivern]
+      comment: "Thanks — we'll look at this bug."
+
+    - name: enhancement
+      when:
+        - author_not_in: [dependabot, ziee-bot]
+        - intention: enhancement
+      labels:
+        add: [enhancement]
+
+    - name: docs
+      when:
+        - author_not_in: [dependabot, ziee-bot]
+        - intention:
+            name: docs
+            description: "A documentation request."
+      labels:
+        add: [docs]
+      assign: [clivern]
+
+    - name: security
+      when:
+        - author_not_in: [dependabot, ziee-bot]
+        - intention: security
+      labels:
+        add: [security]
+      assign: [clivern]
+
+pr_triage:
+  enabled: true
+  comments: outcomes
+  ai:
+    enabled: true
+    max_prs_opened: { count: 50, within: 24h }
+    except:
+      - or:
+          - author_in: [dependabot, ziee-bot]
+          - author_in_team: [sre]
+    knowledge:
+      - tag: docs
+  commands:
+    label:
+      allow:
+        - users: [clivern]
+        - teams: [sre]
+    unlabel:
+      allow:
+        - users: [clivern]
+        - teams: [sre]
+    assign:
+      allow:
+        - users: [clivern]
+        - self: true
+    unassign:
+      allow:
+        - users: [clivern]
+        - teams: [sre]
+    reviewers:
+      allow:
+        - users: [clivern]
+        - teams: [sre]
+    close:
+      allow:
+        - users: [clivern]
+        - teams: [sre]
+    reopen:
+      allow:
+        - users: [clivern]
+        - teams: [sre]
+        - self: true
+    spam:
+      allow:
+        - users: [clivern]
+        - teams: [sre]
+    summarize:
+      allow:
+        - users: [clivern]
+        - teams: [sre]
+        - self: true
+  rules:
+    - name: rate-limit
+      when:
+        - author_not_in: [dependabot, ziee-bot]
+        - author_not_in_team: [sre]
+        - max_prs_opened: { count: 100, within: 24h }
+      labels:
+        add: [spam]
+      close: true
+      block_author: true
+      comment: "Too many pull requests in 24h."
+
+    - name: blocked-authors
+      when:
+        - author_in: [known-spammer]
+      labels:
+        add: [spam]
+      close: true
+      block_author: true
+      comment: "This account is blocked."
+
+    - name: spam-blocklist
+      when:
+        - author_blocked
+      labels:
+        add: [spam]
+      close: true
+      comment: "This account is on the blocklist."
+
+    - name: spam
+      when:
+        - author_not_in: [dependabot, ziee-bot]
+        - author_not_in_team: [sre]
         - intention:
             name: spam
             description: "Unsolicited promo, phishing, or content unrelated to this repository."
@@ -103,46 +312,67 @@ issue_triage:
       block_author: true
       comment: "Closed as spam."
 
-    # Open as dependabot.
+    - name: area-python
+      when:
+        - files: [python/**]
+      labels:
+        add: [area/python]
+      assign: [clivern]
+
+    - name: area-review
+      when:
+        - files: [review-code/**]
+      labels:
+        add: [area/review]
+      assign: [clivern]
+
+    - name: size-s
+      when:
+        - max_files_changed: 20
+      labels:
+        add: [size/s]
+
+    - name: size-l
+      when:
+        - min_files_changed: 21
+      labels:
+        add: [size/l]
+        remove: [size/s]
+      assign: [clivern]
+
     - name: bot
       when:
-        - author_in: [dependabot]
+        - author_in: [dependabot, ziee-bot]
       labels:
         add: [bot]
 
-    # First issue from a human who is not dependabot.
     - name: first-contribution
       when:
-        - author_not_in: [dependabot]
+        - author_not_in: [dependabot, ziee-bot]
         - first_contribution
       labels:
         add: [first-contribution]
-      comment: "Welcome — thanks for the first issue."
+      comment: "Welcome — thanks for the first pull request."
 
-    # Open as clivern (member of teams.sre above).
     - name: from-sre
       when:
         - author_in_team: [sre]
       labels:
         add: [team/sre]
 
-    # Open as anyone who is not on sre.
     - name: not-sre
       when:
         - author_not_in_team: [sre]
       labels:
         add: [community]
 
-    # Title contains "hotfix".
     - name: title-hotfix
       when:
         - title: "hotfix"
       labels:
         add: [hotfix]
-        remove: [needs-triage]
       assign: [clivern]
 
-    # Body contains "hotfix".
     - name: body-hotfix
       when:
         - body: "hotfix"
@@ -150,63 +380,63 @@ issue_triage:
         add: [hotfix]
       comment: "Body matched hotfix."
 
-    # Issue already has the tracked label (add it, then edit the issue).
-    - name: has-label
-      when:
-        - label: tracked
-      comment: "This issue is tracked."
-
-    # Author is clivern or the title contains "urgent", and the author is not dependabot.
-    - name: and-or
-      when:
-        - or:
-            - author_in: [clivern]
-            - title: "urgent"
-        - and:
-            - author_not_in: [dependabot]
-            - -closed
-      labels:
-        add: [tracked]
-
-    # Re-open evaluation of an already closed issue.
-    - name: when-closed
-      when:
-        - closed
-      labels:
-        add: [closed-again]
-
-    # Title like "crash" / "broken".
     - name: bug
       when:
+        - author_not_in: [dependabot, ziee-bot]
         - intention:
             name: bug
-            description: "A defect or unexpected behavior."
+            description: "A defect or unexpected behavior that needs a fix."
       labels:
         add: [bug]
       assign: [clivern]
-      comment: "Thanks — we'll look at this bug."
 
-    # Title like "add support for …".
     - name: enhancement
       when:
+        - author_not_in: [dependabot, ziee-bot]
         - intention: enhancement
       labels:
         add: [enhancement]
 
-    # Title like "docs are wrong".
     - name: docs
       when:
+        - author_not_in: [dependabot, ziee-bot]
         - intention:
             name: docs
-            description: "A documentation request."
+            description: "Documentation-only changes."
       labels:
         add: [docs]
-      assign: [maya]
+      assign: [clivern]
 
-    # Title like "vulnerability in …".
     - name: security
       when:
+        - author_not_in: [dependabot, ziee-bot]
         - intention: security
       labels:
         add: [security]
       assign: [clivern]
+
+assistant:
+  history: 20
+  knowledge:
+    - tag: docs
+  issues:
+    enabled: true
+    allow:
+      - users: [clivern]
+      - teams: [sre]
+      - self: true
+  pull_requests:
+    enabled: true
+    allow:
+      - users: [clivern]
+      - teams: [sre]
+      - self: true
+
+merge_queue:
+  enabled: false
+
+pr_reviews:
+  enabled: false
+
+flows:
+  enabled: false
